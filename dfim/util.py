@@ -100,7 +100,7 @@ def get_correct_predictions(true_labels, predicted_labels,
     """
     correct_predictions = []
 
-    for i in xrange(len(true_labels)):
+    for i in range(len(true_labels)):
         if true_labels[i] == 1 and predicted_labels[i] > pos_threshold:
             correct_predictions.append(i)
         if neg_threshold is not None:
@@ -461,7 +461,7 @@ from random import shuffle
 
 def prepare_edges(s):
     edges = defaultdict(list)
-    for i in xrange(len(s)-1):
+    for i in range(len(s)-1):
         edges[s[i]].append(s[i+1])
     return edges
 
@@ -487,6 +487,31 @@ def traverse_edges(s, edges):
 def dinuc_shuffle(s):
     s = s.upper()
     return traverse_edges(s, shuffle_edges(prepare_edges(s)))
+
+def setOfSeqsTo2Dimages(sequences):
+    import numpy as np;
+    toReturn = np.zeros((len(sequences),1,4,len(sequences[0]))); #additional index for channel
+    for (seqIdx, sequence) in enumerate(sequences):
+        seqTo2DImages_fillInArray(toReturn[seqIdx][0], sequence);
+    return toReturn;
+
+def seqTo2DImages_fillInArray(zerosArray,sequence):
+    #zerosArray should be an array of dim 4xlen(sequence), filled with zeros.
+    #will mutate zerosArray
+    for (i,char) in enumerate(sequence):
+        if (char=="A" or char=="a"):
+            charIdx = 0;
+        elif (char=="C" or char=="c"):
+            charIdx = 1;
+        elif (char=="G" or char=="g"):
+            charIdx = 2;
+        elif (char=="T" or char=="t"):
+            charIdx = 3;
+        elif (char=="N" or char=="n"):
+            continue; #leave that pos as all 0's
+        else:
+            raise RuntimeError("Unsupported character: "+str(char));
+        zerosArray[charIdx,i]=1;
 
 
 

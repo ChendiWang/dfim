@@ -8,11 +8,13 @@ import pandas as pd
 import numpy as np
 import copy
 import scipy
-import cPickle as pickle
+import pickle
 import dfim.util
+from importlib import reload
+
 
 import deeplift
-from deeplift.conversion import keras_conversion as kc
+from deeplift.conversion import kerasapi_conversion as kc
 
 BASES = ['A','C','G','T']
 DEFAULT_GC_FRACTION = 0.46
@@ -65,6 +67,7 @@ def generate_mutants_and_key(sequences, mut_loc_dict, sequence_index=None,
       # If there are two embedded motifs
       seq_muts = [name for name in mut_loc_dict.keys() 
                        if mut_loc_dict[name]['seq'] == seq]
+      
       if len(seq_muts) > 0:
 
           # Add original sequence to the list of sequences
@@ -403,6 +406,7 @@ def get_reference(sequences, importance_func, gc_fraction=0.5,
     OR
     0 < gc_fraction < 1
     """
+    from importlib import reload
     reload(dfim.util)
     reload(deeplift)
     if shuffle is 'random':
@@ -410,7 +414,6 @@ def get_reference(sequences, importance_func, gc_fraction=0.5,
         deeplift_many_refs_func = deeplift.util.get_shuffle_seq_ref_function(
             score_computation_function = importance_func,
             shuffle_func = dfim.util.random_shuffle_fasta,
-            seed = seed,
             one_hot_func = lambda x: np.array([dfim.util.one_hot_encode(seq) 
                                                 for seq in x])
         )
@@ -420,7 +423,6 @@ def get_reference(sequences, importance_func, gc_fraction=0.5,
         deeplift_many_refs_func = deeplift.util.get_shuffle_seq_ref_function(
             score_computation_function = importance_func,
             shuffle_func = dfim.util.dinuc_shuffle,
-            seed = seed,
             one_hot_func = lambda x: np.array([dfim.util.one_hot_encode(seq) 
                                                 for seq in x])
         )
@@ -453,27 +455,27 @@ def compute_importance(model, sequences, tasks,
                        reference_gc=0.46,
                        reference_shuffle_type=None,
                        num_refs_per_seq=10,
-                       seed=1):
+                       seed=1,
+                       keras_model_weights=""):
     """
     reference_shuffle_type in ['random', 'dinuc']
     reference_gc = 0 will return numpy array of 0s
     reference_gc < 1 will assign each G and C reference_gc/2
     """
-
+    
     ### Compute Importance scores
     print('Calculating Importance Scores')
-
+    from deeplift.layers import NonlinearMxtsMode
     importance_method = {
-        "deeplift": deeplift.blobs.NonlinearMxtsMode.DeepLIFT_GenomicsDefault,
-        "rescale_all_layers": deeplift.blobs.NonlinearMxtsMode.Rescale,
-        "revealcancel_all_layers": deeplift.blobs.NonlinearMxtsMode.RevealCancel,
-        "gradient_input": deeplift.blobs.NonlinearMxtsMode.Gradient,
-        "guided_backprop": deeplift.blobs.NonlinearMxtsMode.GuidedBackprop,
-        "deconv": deeplift.blobs.NonlinearMxtsMode.DeconvNet
+        "deeplift": NonlinearMxtsMode.DeepLIFT_GenomicsDefault,
+        "rescale_all_layers": NonlinearMxtsMode.Rescale,
+        "revealcancel_all_layers": NonlinearMxtsMode.RevealCancel,
+        "gradient_input": NonlinearMxtsMode.Gradient,
+        "guided_backprop": NonlinearMxtsMode.GuidedBackprop,
+        "deconv": NonlinearMxtsMode.DeconvNet
     }
 
-    importance_model = kc.convert_sequential_model(model,
-                        nonlinear_mxts_mode=importance_method[score_type])
+    importance_model = kc.convert_model_from_saved_files(h5_file=keras_model_weights,nonlinear_mxts_mode=importance_method[score_type])
 
     importance_func = importance_model.get_target_contribs_func(
                                 find_scores_layer_idx=find_scores_layer_idx,
@@ -702,7 +704,7 @@ def dfim_element_by_base(delta_dict, task, seq, diagonal_value,
     # Extract all the differential profiles
     for m in delta_dict[task][seq].keys():
         assert len(delta_dict[task][seq][m].keys()) == 1
-        r = delta_dict[task][seq][m].keys()[0]
+        r = list(delta_dict[task][seq][m].keys())[0]
 
         if absolute_value:
             delta_profile = abs(delta_dict[task][seq][m][r]['delta_profile'])
@@ -776,7 +778,7 @@ def compute_dfim(delta_dict, sequence_index, tasks,
      
                     if len(np.unique(resp_sizes)) == 1:
 
-                        # print('Detected response elements of same size %s, making DFIM'%resp_sizes[0])
+                        print('Detected response elements of same size %s, making DFIM'%resp_sizes[0])
 
                         dfim_array = dfim_per_base(
                             dfim_key=mutated_seq_key[mutated_seq_key.mut_key == mkey], 
@@ -892,7 +894,7 @@ def capture_strong_interactions(dfim_dict, delta_dict,
 
             score_thresh = scipy.stats.scoreatpercentile(all_scores, top_pct)
 
-        elif score_thresh is not None:
+        elif score_thresh is None:
 
             print('--score_thresh and --top_pct not provided, taking all sequences')
             score_thresh = np.min(all_scores)
@@ -910,7 +912,7 @@ def capture_strong_interactions(dfim_dict, delta_dict,
 
                         capture_dict[task][seq][capture_key] = {
                                     'delta_dict': delta_dict[task][seq][m_label][r],
-                                    'dfim': dfim_dict[task][seq][mut_key]}
+                                    'dfim': dfim_dict[task][seq][m_label]}
 
     if pickle_file is not None:
 

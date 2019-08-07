@@ -326,7 +326,7 @@ def plot_delta_tracks(track_list, title_list, x_tick_interval=1,
             neg_heights = np.copy(letter_heights)
             neg_heights[letter_heights > 0] = 0
             for x_pos, heights in enumerate(letter_heights):
-                letters_and_heights = sorted(itertools.izip(heights, 'ACGT'))
+                letters_and_heights = sorted(itertools.zip_longest(heights, 'ACGT')) #Changed by Chendi on July 23, 2019 from izip to zip for python3
                 y_pos_pos = 0.0
                 y_neg_pos = 0.0
                 for height, letter in letters_and_heights:
