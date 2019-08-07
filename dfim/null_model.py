@@ -6,9 +6,13 @@ import os, sys
 import pandas as pd
 import numpy as np
 import operator
+from functools import reduce
+import random
 
 import deeplift
-from deeplift.conversion import keras_conversion as kc
+from deeplift.conversion import kerasapi_conversion as kc
+
+import dfim.util
 
 BASES = ['A','C','G','T']
 
@@ -16,8 +20,12 @@ def shuffle_seq_from_fasta(seq_fastas, dinuc=False):
 
     ### DINUCLEOTIDE
     if dinuc:
+        from importlib import reload
+        reload(deeplift)
         print('Using dinucleotide shuffle')
-        shuf_seq_fastas = [deeplift.dinuc_shuffle.dinuc_shuffle(s) for s in seq_fastas]
+#        shuf_seq_fastas = [deeplift.dinuc_shuffle.dinuc_shuffle(s) for s in seq_fastas] # Edited by Chendi
+        from deeplift.dinuc_shuffle import dinuc_shuffle
+        shuf_seq_fastas = [dinuc_shuffle(s) for s in seq_fastas]
 
     ### RANDOM SHUFFLE
     else:
@@ -25,7 +33,7 @@ def shuffle_seq_from_fasta(seq_fastas, dinuc=False):
         random.seed(1)
         shuf_seq_fastas = [''.join(random.sample(s,len(s))) for s in seq_fastas]
 
-    shuf_sequences = np.swapaxes(util.setOfSeqsTo2Dimages(shuf_seq_fastas).squeeze(1), 1, 2)
+    shuf_sequences = np.swapaxes(dfim.util.setOfSeqsTo2Dimages(shuf_seq_fastas).squeeze(1), 1, 2)
     shuf_sequences = shuf_sequences.astype('float32')
 
     return shuf_sequences
@@ -34,8 +42,27 @@ def shuffle_seq_from_one_hot(sequences, dinuc=False):
 
     ### DINUCLEOTIDE
     if dinuc:
-        raise ValueError('Not implemented')
-        # Convert to fasta to use DL function?
+#        raise ValueError('Not implemented')
+        # Convert to fasta to use DL function # Edited by Chendi
+        def seq_from_onehot(onehot_data):
+            sequences = []
+            for i in range(onehot_data.shape[0]):
+                onehot_seq = onehot_data[i, :, :]
+                sequence = ''
+                for j in range(onehot_seq.shape[0]):
+                    if(onehot_seq[j, 0]==1):
+                        sequence = sequence + BASES[0]
+                    elif (onehot_seq[j, 1]==1):
+                        sequence = sequence + BASES[1]
+                    elif (onehot_seq[j, 2]==1):
+                        sequence = sequence + BASES[2]
+                    elif (onehot_seq[j, 3]==1):
+                        sequence = sequence + BASES[3]
+        
+                sequences.append(sequence)
+        
+            return sequences
+        shuf_sequences = shuffle_seq_from_fasta(seq_from_onehot(sequences), dinuc=True)
 
     ### RANDOM SHUFFLE
     else:
@@ -67,7 +94,7 @@ def flatten_nested_dict(score_dict):
         score_leaves: list of numpy arrays with scores
     """
     def find_leaf(score_dict):
-        for key, val in score_dict.iteritems():
+        for key, val in score_dict.items():
             key_history.append(key)
             if isinstance(val, dict):
                 find_leaf(val)
@@ -109,7 +136,7 @@ def restore_nested_dict(score_dict, scores_list):
 
     def restore_leaf(score_dict, descend=0, key_tree=None, 
                      scores_start=None):
-        for key, val in score_dict.iteritems():
+        for key, val in score_dict.items():
             # print key; print key_tree; print scores_start
             if isinstance(val, dict):
                 if descend not in key_tree:
